@@ -16,6 +16,8 @@ import argparse
 import yaml
 import torch
 import time
+import numpy as np
+import matplotlib.pyplot as plt
 
 # Monkey patch collections
 import collections
@@ -120,6 +122,10 @@ def main():
         train(args, model)
     elif args.mode == 'eval':
         eval(args, model)
+    elif args.mode == 'visualise':
+        num_cpoints_ls = [1, int(0.25*28*28), int(0.5*28*28), int(0.75*28*28), int(28*28)]
+        pred_dist = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
+        visualise_img(pred_dists)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -295,6 +301,54 @@ def eval(args, model):
         logger.info(line)
 
     return line
+
+def pred_dists(args, model, num_cpoints_ls):
+    torch.manual_seed(args.eval_seed)
+    torch.cuda.manual_seed(args.eval_seed)
+
+    eval_ds = EMNIST(train=False, class_range=args.class_range)
+    eval_loader = torch.utils.data.DataLoader(eval_ds,
+            batch_size=1,  # one image per batch
+            shuffle=False, num_workers=0)
+
+    # generate one batch per number of context points specified
+    eval_batches = []
+    for num_cpoints in num_cpoints_ls:
+        for x, _ in tqdm(eval_loader, ascii=True):
+            eval_batches.append(img_to_task(
+                x, num_ctx=num_cpoints, target_all=True)
+            )
+            break
+
+    model.eval()
+    pred_dist = []
+    with torch.no_grad():
+        for batch in tqdm(eval_batches, ascii=True):
+            for key, val in batch.items():
+                batch[key] = val.cuda()
+            pred_tar = model.predict(batch.xc, batch.yc, batch.xt)
+            pred_dist.append(pred_tar)
+    return pred_dist
+
+def visualise_img(pred_dist):
+    fig, axs = plt.subplots(2, 4, figsize=(20, 10))
+
+    for i, dist in enumerate(pred_dist):
+        mean = dist.mean.numpy()
+        variance = dist.variance.numpy()
+        
+        # Visualise the mean
+        axs[0, i].imshow(mean.reshape(28, 28), cmap='gray')
+        axs[0, i].set_title(f'Mean {i+1}')
+        axs[0, i].axis('off')
+
+        # Visualise the variance
+        axs[1, i].imshow(variance.reshape(28, 28), cmap='hot')
+        axs[1, i].set_title(f'Variance {i+1}')
+        axs[1, i].axis('off')
+
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == '__main__':
     main()
