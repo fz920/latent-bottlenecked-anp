@@ -157,7 +157,7 @@ def train(args, model):
             batch_size=args.train_batch_size,
             max_num_points=args.max_num_points,
             device='cuda')
-        
+
         if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp"]:
             outs = model(batch, num_samples=args.train_num_samples)
         else:
