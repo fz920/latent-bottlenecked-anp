@@ -95,6 +95,12 @@ if __name__ == '__main__':
 
     train_imgs = torch.stack(train_imgs)
     train_labels = torch.LongTensor(train_labels)
+
+    # Check if the directory exists, and create it if it doesn't
+    resolution_path = osp.join(datasets_path, f'celeba{args.resolution}')
+    if not osp.exists(resolution_path):
+        os.makedirs(resolution_path)
+
     torch.save([train_imgs, train_labels], osp.join(datasets_path, f'celeba{args.resolution}', 'train.pt'))
 
     eval_imgs = torch.stack(eval_imgs)
