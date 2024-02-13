@@ -113,7 +113,6 @@ class LBANP(nn.Module):
 
 
     def forward(self, batch, num_samples=None, reduce_ll=True):
-
         pred_tar = self.predict(batch.xc, batch.yc, batch.xt)
 
         outs = AttrDict()

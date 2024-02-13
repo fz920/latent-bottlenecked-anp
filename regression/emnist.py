@@ -29,7 +29,7 @@ for type_name in collections.abc.__all__:
 from attrdict import AttrDict
 from tqdm import tqdm
 
-from data.image import img_to_task
+from data.image import img_to_task, task_to_img, pred_to_img
 from data.emnist import EMNIST
 from utils.misc import load_module
 from utils.paths import results_path, evalsets_path
@@ -44,7 +44,7 @@ def main():
             'eval_all_metrics',
             'eval_all_metrics_multiple_runs',
             'plot', 'plot_samples', 'ensemble',
-            'eval_multiple_runs'],
+            'eval_multiple_runs', 'visualize'],
             default='train')
     parser.add_argument('--expid', type=str, default='default')
     parser.add_argument('--resume', action='store_true', default=False)
@@ -122,10 +122,10 @@ def main():
         train(args, model)
     elif args.mode == 'eval':
         eval(args, model)
-    elif args.mode == 'visualise':
+    elif args.mode == 'visualize':
         num_cpoints_ls = [1, int(0.25*28*28), int(0.5*28*28), int(0.75*28*28), int(28*28)]
-        pred_dist = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
-        visualise_img(pred_dists)
+        pred_dist, task_img = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
+        visualise_img(pred_dist, task_img)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -305,6 +305,8 @@ def eval(args, model):
 def pred_dists(args, model, num_cpoints_ls):
     torch.manual_seed(args.eval_seed)
     torch.cuda.manual_seed(args.eval_seed)
+    ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
+    model.load_state_dict(ckpt.model)
 
     eval_ds = EMNIST(train=False, class_range=args.class_range)
     eval_loader = torch.utils.data.DataLoader(eval_ds,
@@ -316,7 +318,7 @@ def pred_dists(args, model, num_cpoints_ls):
     for num_cpoints in num_cpoints_ls:
         for x, _ in tqdm(eval_loader, ascii=True):
             eval_batches.append(img_to_task(
-                x, num_ctx=num_cpoints, target_all=True)
+                x, num_ctx=num_cpoints, target_all=True, pred_all=True)
             )
             break
 
@@ -328,26 +330,38 @@ def pred_dists(args, model, num_cpoints_ls):
                 batch[key] = val.cuda()
             pred_tar = model.predict(batch.xc, batch.yc, batch.xt)
             pred_dist.append(pred_tar)
-    return pred_dist
+    return pred_dist, eval_batches  # return the predicted distributions and the context images
 
-def visualise_img(pred_dist):
-    fig, axs = plt.subplots(2, 4, figsize=(20, 10))
 
-    for i, dist in enumerate(pred_dist):
-        mean = dist.mean.numpy()
-        variance = dist.variance.numpy()
-        
+def visualise_img(pred_dist, eval_batches, shape=(1, 28, 28)):
+    fig, axs = plt.subplots(len(pred_dist), 3, figsize=(8, 8))
+
+    for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
+        mean = dist.mean.cpu().detach()  # Assuming pred_dist is on GPU
+        variance = dist.variance.cpu().detach() # Assuming pred_dist is on GPU
+
+        # Reconstruct the task image using the context points
+        task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
+
+        # Visualise the task images
+        axs[i, 0].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
+        axs[i, 0].set_title(f'Task Image {i+1}')
+        axs[i, 0].axis('off')
+
         # Visualise the mean
-        axs[0, i].imshow(mean.reshape(28, 28), cmap='gray')
-        axs[0, i].set_title(f'Mean {i+1}')
-        axs[0, i].axis('off')
+        mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
+        axs[i, 1].imshow(mean_img, cmap='gray')
+        axs[i, 1].set_title(f'Mean {i+1}')
+        axs[i, 1].axis('off')
 
         # Visualise the variance
-        axs[1, i].imshow(variance.reshape(28, 28), cmap='hot')
-        axs[1, i].set_title(f'Variance {i+1}')
-        axs[1, i].axis('off')
+        var_img = pred_to_img(batch.xt, variance, shape)[0].permute(1, 2, 0)
+        axs[i, 2].imshow(var_img, cmap='gray')
+        axs[i, 2].set_title(f'Variance {i+1}')
+        axs[i, 2].axis('off')
 
     plt.tight_layout()
+    plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis.pdf', format='pdf', bbox_inches='tight')
     plt.show()
 
 if __name__ == '__main__':

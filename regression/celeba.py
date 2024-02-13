@@ -59,7 +59,7 @@ def main():
     parser.add_argument('--wd', type=float, default=0.0)
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--eval_freq', type=int, default=10)
-    parser.add_argument('--save_freq', type=int, default=10)
+    parser.add_argument('--save_freq', type=int, default=5)
 
     # Eval
     parser.add_argument('--eval_seed', type=int, default=0)

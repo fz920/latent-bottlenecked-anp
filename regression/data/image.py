@@ -17,8 +17,8 @@ import torch
 from attrdict import AttrDict
 from torch.distributions import StudentT
 
-def img_to_task(img, num_ctx=None,
-        max_num_points=None, target_all=False, t_noise=None, max_num_target_points=None):
+def img_to_task(img, num_ctx=None, max_num_points=None, target_all=False,
+                t_noise=None, max_num_target_points=None, pred_all=False):
 
     B, C, H, W = img.shape
     num_pixels = H*W
@@ -39,19 +39,25 @@ def img_to_task(img, num_ctx=None,
             torch.randint(low=3, high=min(max_num_points-num_ctx, max_num_target_points), size=[1]).item()
     num_points = num_ctx + num_tar
     idxs = torch.cuda.FloatTensor(B, num_pixels).uniform_().argsort(-1)[...,:num_points].to(img.device)
-    x1, x2 = idxs//W, idxs%W
+    x1, x2 = idxs // W, idxs % W
     batch.x = torch.stack([
         2*x1.float()/(H-1) - 1,
         2*x2.float()/(W-1) - 1], -1).to(img.device)
     batch.y = (torch.gather(img, -1, idxs.unsqueeze(-2).repeat(1, C, 1))\
             .transpose(-2, -1) - 0.5).to(img.device)
 
-    batch.xc = batch.x[:,:num_ctx]
-    batch.xt = batch.x[:,num_ctx:]
-    batch.yc = batch.y[:,:num_ctx]
-    batch.yt = batch.y[:,num_ctx:]
-
-    return batch
+    if pred_all:
+        batch.xc = batch.x[:,:num_ctx]
+        batch.xt = batch.x
+        batch.yc = batch.y[:,:num_ctx]
+        batch.yt = batch.y
+        return batch
+    else:
+        batch.xc = batch.x[:,:num_ctx]
+        batch.xt = batch.x[:,num_ctx:]
+        batch.yc = batch.y[:,:num_ctx]
+        batch.yt = batch.y[:,num_ctx:]
+        return batch
 
 def coord_to_img(x, y, shape):
     x = x.cpu()
@@ -105,3 +111,25 @@ def task_to_img(xc, yc, xt, yt, shape):
     completed_img = completed_img.clamp(0, 1)
 
     return task_img, completed_img
+
+def pred_to_img(xt, yt, shape):
+    xt = xt.cpu()
+    yt = yt
+
+    B = xt.shape[0]
+    C, H, W = shape
+
+    xt1, xt2 = xt[...,0], xt[...,1]
+    xt1 = ((xt1+1)*(H-1)/2).round().long()
+    xt2 = ((xt2+1)*(W-1)/2).round().long()
+
+    completed_img = torch.zeros(B, 3, H, W).to(xt.device)
+    completed_img[:,2,:,:] = 1.0
+    completed_img[:,1,:,:] = 0.4
+
+    for b in range(B):
+        for c in range(3):
+            completed_img[b, c, xt1[b], xt2[b]] = yt[b, :, min(c, C-1)] + 0.5
+    completed_img = completed_img.clamp(0, 1)
+
+    return completed_img
