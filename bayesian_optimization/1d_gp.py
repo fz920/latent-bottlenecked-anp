@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--model', type=str, default="tnpa")
 
     # Train
+    parser.add_argument('--pretrain', action='store_true', default=False)
     parser.add_argument('--train_seed', type=int, default=0)
     parser.add_argument('--train_batch_size', type=int, default=16)
     parser.add_argument('--train_num_samples', type=int, default=4)
@@ -46,9 +47,20 @@ def main():
     parser.add_argument('--eval_num_samples', type=int, default=50)
     parser.add_argument('--eval_logfile', type=str, default=None)
 
+    # LBANP Arguments
+    parser.add_argument('--num_latents', type=int, default=8)
+    parser.add_argument('--num_latents_per_layer', type=int, default=8)
+    parser.add_argument('--d_model', type=int, default=64)
+    parser.add_argument('--emb_depth', type=int, default=4)
+    parser.add_argument('--dim_feedforward', type=int, default=128)
+    parser.add_argument('--nhead', type=int, default=4)
+    parser.add_argument('--dropout', type=int, default=0.0)
+    parser.add_argument('--num_layers', type=int, default=6)
+
     # OOD settings
     parser.add_argument('--eval_kernel', type=str, default='rbf')
     parser.add_argument('--t_noise', type=float, default=None)
+
 
     args = parser.parse_args()
 
@@ -61,8 +73,16 @@ def main():
     with open(f'configs/gp/{args.model}.yaml', 'r') as f:
         config = yaml.safe_load(f)
 
-    if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd"]:
-        model = model_cls(**config)
+    for key, val in vars(args).items(): # Override the default arguments
+        if key in config:
+            config[key] = val
+            print(f"Overriding argument {key}: {config[key]}")
+
+    if args.pretrain:
+        assert args.model == 'tnpa'
+        config['pretrain'] = args.pretrain
+
+    model = model_cls(**config)
     model.cuda()
 
     if args.mode == 'train':
@@ -122,7 +142,7 @@ def train(args, model):
             max_num_points=args.max_num_points,
             device='cuda')
         
-        if args.model in ["np", "anp", "bnp", "banp"]:
+        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp"]:
             outs = model(batch, num_samples=args.train_num_samples)
         else:
             outs = model(batch)

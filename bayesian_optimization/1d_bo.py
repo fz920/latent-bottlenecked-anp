@@ -58,7 +58,7 @@ def main():
         model_cls = getattr(load_module(f'models/{args.model}.py'), args.model.upper())
         with open(f'configs/gp/{args.model}.yaml', 'r') as f:
             config = yaml.safe_load(f)
-        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd"]:
+        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd", "lbanp"]:
             model = model_cls(**config)
         model.cuda()
 
@@ -342,10 +342,11 @@ def models(args, model):
 def plot(args):
     all_kernels = ['rbf', 'matern', 'periodic']
     kernel_names = ['RBF', 'Matérn 5/2', 'Periodic']
-    all_models = ["np", "anp", "bnp", "banp", "cnp", "canp", "tnpd", "tnpa", "tnpnd"]
-    model_names = ["NP", "ANP", "BNP", "BANP", "CNP", "CANP", "TNP-D", "TNP-A", "TNP-ND"]
-    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange']
-    fig, axes = plt.subplots(1, 3, figsize=(18,5))
+    all_models = ["np", "anp", "bnp", "banp", "cnp", "canp", "tnpd", "tnpa", "tnpnd", "lbanp"]
+    model_names = ["NP", "ANP", "BNP", "BANP", "CNP", "CANP", "TNP-D", "TNP-A", "TNP-ND", "LBANP"]
+    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange', 
+              'black']
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     for k_id, kernel in enumerate(all_kernels):
         ax = axes[k_id]
         for i, model in enumerate(all_models):

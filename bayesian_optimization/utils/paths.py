@@ -1,6 +1,6 @@
 import os
 
-ROOT = ''
+ROOT = '/rds/user/fz287/hpc-work/MLMI4/'
 
 evalsets_path = os.path.join(ROOT, 'evalsets')
 datasets_path = os.path.join(ROOT, 'datasets')
