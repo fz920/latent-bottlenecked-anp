@@ -128,7 +128,6 @@ class LBANPEncoderLayer(nn.Module):
 
         assert (self.latent_dim % nhead == 0)
 
-
         if norm_first:
             self.latent_self_attn = PreNorm(self.latent_dim, Attention(self.latent_dim, heads = nhead, dim_head = self.latent_dim // nhead, dropout = dropout))
             self.latent_ff = PreNorm(self.latent_dim, FeedForward(self.latent_dim, dim_feedforward=dim_feedforward, dropout = dropout))
