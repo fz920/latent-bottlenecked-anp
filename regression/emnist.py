@@ -123,7 +123,7 @@ def main():
     elif args.mode == 'eval':
         eval(args, model)
     elif args.mode == 'visualize':
-        num_cpoints_ls = [1, int(0.25*28*28), int(0.5*28*28), int(0.75*28*28), int(28*28)]
+        num_cpoints_ls = [1, int(0.25*28*128), int(0.5*28*28), int(0.75*28*28), int(28*28)]
         pred_dist, task_img = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
         visualise_img(pred_dist, task_img)
 
