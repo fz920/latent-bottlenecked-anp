@@ -19,7 +19,7 @@ def main():
     # Experiment
     parser.add_argument('--mode', default='train')
     parser.add_argument('--expid', type=str, default=None)
-    parser.add_argument('--resume', type=str, default=None)
+    parser.add_argument('--resume', action='store_true')
 
     # Data
     parser.add_argument('--max_num_points', type=int, default=50)
@@ -34,7 +34,7 @@ def main():
     parser.add_argument('--train_num_samples', type=int, default=4)
     parser.add_argument('--train_num_bs', type=int, default=10)
     parser.add_argument('--lr', type=float, default=5e-4)
-    parser.add_argument('--num_epochs', type=int, default=100000)
+    parser.add_argument('--num_steps', type=int, default=100000)
     parser.add_argument('--print_freq', type=int, default=200)
     parser.add_argument('--eval_freq', type=int, default=5000)
     parser.add_argument('--save_freq', type=int, default=1000)
@@ -47,7 +47,7 @@ def main():
     parser.add_argument('--eval_num_samples', type=int, default=50)
     parser.add_argument('--eval_logfile', type=str, default=None)
 
-    # LBANP Arguments
+    # LBANP and ISANP Arguments
     parser.add_argument('--num_latents', type=int, default=8)
     parser.add_argument('--num_latents_per_layer', type=int, default=8)
     parser.add_argument('--d_model', type=int, default=64)
@@ -113,7 +113,8 @@ def train(args, model):
 
     sampler = GPSampler(RBFKernel(), seed=args.train_seed)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.num_epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=args.num_steps)
 
     if args.resume:
         ckpt = torch.load(os.path.join(args.root, 'ckpt.tar'))
@@ -141,7 +142,7 @@ def train(args, model):
             batch_size=args.train_batch_size,
             max_num_points=args.max_num_points,
             device='cuda')
-        
+
         if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp"]:
             outs = model(batch, num_samples=args.train_num_samples)
         else:

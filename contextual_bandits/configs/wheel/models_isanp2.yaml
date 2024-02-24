@@ -10,11 +10,7 @@
 ####################################################################################
 
 
-# paths.yaml
+# cmab_models.py
 
-datasets_path:
-  "/rds/user/fz287/hpc-work/MLMI4/datasets"
-evalsets_path:
-  "/rds/user/fz287/hpc-work/MLMI4/evalsets"
-results_path:
-  "/rds/user/fz287/hpc-work/MLMI4/results"
+- "uniform"  # first model is a baseline (for regret normalization in comparison of performance)
+- "lbanp"

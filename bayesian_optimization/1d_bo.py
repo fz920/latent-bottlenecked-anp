@@ -19,6 +19,8 @@ from data.gp import *
 from utils.misc import load_module
 from utils.paths import results_path
 
+import re
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -42,6 +44,18 @@ def main():
     # Model
     parser.add_argument('--model', type=str, default="tnpa")
 
+    # LBANP and ISANP Arguments
+    parser.add_argument('--pretrain', action='store_true', default=False)
+    parser.add_argument('--num_latents', type=int, default=8)
+    parser.add_argument('--num_latents_per_layer', type=int, default=8)
+    parser.add_argument('--d_model', type=int, default=64)
+    parser.add_argument('--emb_depth', type=int, default=4)
+    parser.add_argument('--dim_feedforward', type=int, default=128)
+    parser.add_argument('--nhead', type=int, default=4)
+    parser.add_argument('--dropout', type=int, default=0.0)
+    parser.add_argument('--num_layers', type=int, default=6)
+
+
     parser.add_argument('--t_noise', type=float, default=None)
 
     args = parser.parse_args()
@@ -58,7 +72,16 @@ def main():
         model_cls = getattr(load_module(f'models/{args.model}.py'), args.model.upper())
         with open(f'configs/gp/{args.model}.yaml', 'r') as f:
             config = yaml.safe_load(f)
-        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd", "lbanp"]:
+        for key, val in vars(args).items(): # Override the default arguments
+            if key in config:
+                config[key] = val
+                print(f"Overriding argument {key}: {config[key]}")
+
+        if args.pretrain:
+            assert args.model == 'tnpa'
+            config['pretrain'] = args.pretrain
+
+        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd", "lbanp", "isanp"]:
             model = model_cls(**config)
         model.cuda()
 
@@ -119,7 +142,7 @@ class PlotIteration(object):
             self.axes[i].legend(loc="upper right", prop={'size': 8})
 
     def save(self, task_num):
-        plt.savefig(osp.join(self.path, f'figures{task_num}.jpeg'))
+        plt.savefig(osp.join(self.path, f'figures{task_num}.pdf'), format='pdf')
         plt.close()
 
 
@@ -342,15 +365,19 @@ def models(args, model):
 def plot(args):
     all_kernels = ['rbf', 'matern', 'periodic']
     kernel_names = ['RBF', 'Matérn 5/2', 'Periodic']
-    all_models = ["np", "anp", "bnp", "banp", "cnp", "canp", "tnpd", "tnpa", "tnpnd", "lbanp"]
-    model_names = ["NP", "ANP", "BNP", "BANP", "CNP", "CANP", "TNP-D", "TNP-A", "TNP-ND", "LBANP"]
-    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange', 
-              'black']
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+    all_models = ["np", "anp", "bnp", "banp", "cnp", "canp", "tnpd", "tnpa", "tnpnd", "lbanp_8", "lbanp_128" "isanp"]
+    model_names = ["NP", "ANP", "BNP", "BANP", "CNP", "CANP", "TNP-D", "TNP-A", "TNP-ND", "LBANP (8)", "LBANP (128)", "ISANP (8)"]
+    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange', 'firebrick', 'purple', 'mediumvioletred']
+    fig, axes = plt.subplots(1, 3, figsize=(20, 5))
     for k_id, kernel in enumerate(all_kernels):
         ax = axes[k_id]
         for i, model in enumerate(all_models):
-            logfile = osp.join(results_path, f'bayesopt_{kernel}', model, f'bo_{kernel}_{model}_{args.bo_seed}.npy')
+            if 'lbanp' in model or 'isanp' in model:
+                match_number = re.search(r'\d+', model)
+                number = int(match_number.group())
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', model[:5], f'{model[:5]}_bo_1d_{number}', f'bo_{kernel}_{model[:5]}_{args.bo_seed}.npy') # currently only 8 latent variables
+            else:
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', model, f'{model}_bo_1d', f'bo_{kernel}_{model}_{args.bo_seed}.npy')
             result = np.load(logfile, allow_pickle=True)
             regrets = np.stack([result[j]['regrets'] for j in range(len(result))], axis=0)
             mean_regret = np.mean(regrets, axis=0)

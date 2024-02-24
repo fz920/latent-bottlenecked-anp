@@ -406,7 +406,7 @@ def _plot_cum_reg(args, names, values):
     plt.xlabel("steps")
     plt.ylabel(f"cumulative-regret")
     plt.title(f"Wheel Bandit - cumulative-regret")
-    plt.savefig(osp.join(path, f"{filename}.jpg"))
+    plt.savefig(osp.join(path, f"{filename}.pdf"), format="pdf")
 
 
 def run_contextual_bandit(context_dim, num_actions, dataset, models, num_bs, device):

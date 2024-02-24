@@ -10,11 +10,12 @@
 ####################################################################################
 
 
-# paths.yaml
-
-datasets_path:
-  "/rds/user/fz287/hpc-work/MLMI4/datasets"
-evalsets_path:
-  "/rds/user/fz287/hpc-work/MLMI4/evalsets"
-results_path:
-  "/rds/user/fz287/hpc-work/MLMI4/results"
+num_latents: 128
+dim_x: 2
+dim_y: 3
+d_model: 64
+emb_depth: 4
+dim_feedforward: 128
+nhead: 4
+dropout: 0.0
+num_layers: 6

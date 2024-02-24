@@ -1,0 +1,7 @@
+Overriding argument num_latents: 8
+Overriding argument d_model: 64
+Overriding argument emb_depth: 4
+Overriding argument dim_feedforward: 128
+Overriding argument nhead: 4
+Overriding argument dropout: 0.0
+Overriding argument num_layers: 6

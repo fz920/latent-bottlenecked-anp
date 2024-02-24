@@ -22,7 +22,7 @@
 #! Note that the job submission script will enforce no more than 32 cpus per GPU.
 #SBATCH --gres=gpu:1
 #! How much wallclock time will be required?
-#SBATCH --time=00:10:00
+#SBATCH --time=00:30:00
 #! What types of email messages do you wish to receive?
 #SBATCH --mail-type=NONE
 #! Uncomment this to prevent the job from being requeued (e.g. if
@@ -37,7 +37,7 @@
 #! ######################################################################################
 #! ######################################################################################
 #! set configurations in run.py, e.g. options="--train_json=train_fbank.json --lr=0.01":
-options="--bo_mode plot"
+options="--expid lbanp_cb_8 --cmab_mode eval --cmab_wheel_delta 0.7 --model lbanp --num_latents 8"
 
 #! ######################################################################################
 #! ######################################################################################
@@ -64,7 +64,7 @@ source /rds/user/fz287/hpc-work/MLMI4/np_venv/bin/activate
 #! Insert additional module load commands after this line if needed:
 
 #! Full path to application executable: 
-application="python 1d_bo.py"
+application="python main.py"
 
 #! Work directory (i.e. where the job will run):
 workdir="$SLURM_SUBMIT_DIR"  # The value of SLURM_SUBMIT_DIR sets workdir to the directory
@@ -111,4 +111,4 @@ echo -e "\nnumtasks=$numtasks, numnodes=$numnodes, mpi_tasks_per_node=$mpi_tasks
 
 echo -e "\nExecuting command:\n==================\n$CMD\n"
 
-eval $CMD
+eval $CMD 

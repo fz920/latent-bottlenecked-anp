@@ -20,9 +20,12 @@ from attrdict import AttrDict
 
 from torch.distributions.normal import Normal
 
-from models.lbanp_modules import LBANPEncoderLayer, LBANPEncoder, NPDecoderLayer, NPDecoder
+from models.isanp_modules import ISANPEncoderLayer, ISANPEncoder, NPDecoderLayer, NPDecoder
 
-class LBANP(nn.Module):
+class ISANP2(nn.Module):
+    """
+        Latent Bottlenecked Attentive Neural Process (LBANPs)
+    """
     def __init__(
         self,
         num_latents,
@@ -34,23 +37,20 @@ class LBANP(nn.Module):
         nhead,
         dropout,
         num_layers,
-        drop_y=0.5,
         norm_first=True,
         bound_std = False
     ):
-        super(LBANP, self).__init__()
-
-        self.drop_y = drop_y
+        super(ISANP2, self).__init__()
 
 
         self.latent_dim = d_model
         self.latents = nn.Parameter(torch.randn(num_latents, self.latent_dim), requires_grad=True) # Learnable latents! 
 
-        # Context Related:
+        # Context Related
         self.embedder = build_mlp(dim_x + dim_y, d_model, d_model, emb_depth)
 
-        encoder_layer = LBANPEncoderLayer(d_model, nhead, dim_feedforward, dropout, norm_first=norm_first)
-        self.encoder = LBANPEncoder(encoder_layer, num_layers)
+        encoder_layer = ISANPEncoderLayer(d_model, nhead, dim_feedforward, dropout, norm_first=norm_first) 
+        self.encoder = ISANPEncoder(encoder_layer, num_layers)
 
 
         # Query Related
@@ -59,61 +59,46 @@ class LBANP(nn.Module):
         decoder_layer = NPDecoderLayer(d_model, nhead, dim_feedforward, dropout, norm_first=norm_first)
         self.decoder = NPDecoder(decoder_layer, num_layers)
 
-
         # Predictor Related
         self.bound_std = bound_std
 
         self.norm_first = norm_first
         if self.norm_first:
             self.norm = nn.LayerNorm(d_model)
-        self.predictor = nn.Sequential( 
+        self.predictor = nn.Sequential(
             nn.Linear(d_model, dim_feedforward),
             nn.ReLU(),
             nn.Linear(dim_feedforward, dim_y*2)
         )
 
-    
-
-    def drop(self, y):
-        y_dropped = torch.randn_like(y)
-        not_drop_ids = torch.rand_like(y) > self.drop_y
-        y_dropped[not_drop_ids] = y[not_drop_ids]
-        return y_dropped
-
-    def get_context_encoding(self, batch, drop_ctx):
+    def get_context_encoding(self, batch):
         # Perform Encoding
-        if drop_ctx:
-            yc_dropped = self.drop(batch.yc)
-            x_y_ctx = torch.cat((batch.xc, yc_dropped), dim=-1)
-        else:
-            x_y_ctx = torch.cat((batch.xc, batch.yc), dim=-1)
+        x_y_ctx = torch.cat((batch.xc, batch.yc), dim=-1)
         context_embeddings = self.embedder(x_y_ctx)
-        context_encodings = self.encoder(context_embeddings, self.latents)
+        _, context_encodings= self.encoder(context_embeddings, self.latents)
         return context_encodings
 
-    def get_predict_encoding(self, batch, drop_ctx=False):
+    def get_predict_encoding(self, batch, context_encodings=None):
 
-        context_encodings = self.get_context_encoding(batch, drop_ctx=drop_ctx)
+        if context_encodings is None:
+            context_encodings = self.get_context_encoding(batch)
 
         # Perform Decoding
         query_embeddings = self.query_embedder(batch.xt)
-
         encoding = self.decoder(query_embeddings, context_encodings)
-        
         # Make predictions
         if self.norm_first:
             encoding = self.norm(encoding)
         return encoding
 
-    def predict(self, xc, yc, xt, num_samples=None, drop_ctx=False):
+    def predict(self, xc, yc, xt, context_encodings=None, num_samples=None):
         batch = AttrDict()
         batch.xc = xc
         batch.yc = yc
         batch.xt = xt
 
-        encoding = self.get_predict_encoding(batch, drop_ctx=drop_ctx)
+        encoding = self.get_predict_encoding(batch, context_encodings=context_encodings)
 
-            
         out = self.predictor(encoding)
 
         mean, std = torch.chunk(out, 2, dim=-1)
@@ -124,9 +109,9 @@ class LBANP(nn.Module):
 
         return Normal(mean, std)
 
-    def forward(self, batch, num_samples=None, reduce_ll=True):
 
-        pred_tar = self.predict(batch.xc, batch.yc, batch.xt, drop_ctx=True)
+    def forward(self, batch, num_samples=None, reduce_ll=True):
+        pred_tar = self.predict(batch.xc, batch.yc, batch.xt)
 
         outs = AttrDict()
         if reduce_ll:
@@ -136,3 +121,5 @@ class LBANP(nn.Module):
         outs.loss = - (outs.tar_ll)
 
         return outs
+
+
