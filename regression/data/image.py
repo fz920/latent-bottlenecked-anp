@@ -114,7 +114,7 @@ def task_to_img(xc, yc, xt, yt, shape):
 
 def pred_to_img(xt, yt, shape):
     xt = xt.cpu()
-    yt = yt
+    yt = yt.cpu()
 
     B = xt.shape[0]
     C, H, W = shape

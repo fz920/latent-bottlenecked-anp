@@ -18,12 +18,14 @@ def main():
     parser = ArgumentParser()
 
     parser.add_argument('--mode', choices=['train', 'eval', 'generate'], default='train')
+    parser.add_argument('--expid', type=str, default=None)
     parser.add_argument('--resume', action='store_true', default=False)
     parser.add_argument('--dimension', type=int, default=3)
 
     parser.add_argument('--model', default='tnpa')
 
     # train
+    parser.add_argument('--pretrain', action='store_true', default=False)
     parser.add_argument('--bound', type=int, default=2)
     parser.add_argument('--train_batch_size', type=int, default=16)
     parser.add_argument('--max_num_points', type=int, default=256)
@@ -42,6 +44,16 @@ def main():
     parser.add_argument('--eval_num_bootstrap', type=int, default=50)
     parser.add_argument('--eval_logfile', type=str, default=None)
 
+    # LBANP and ISANP Arguments
+    parser.add_argument('--num_latents', type=int, default=8)
+    parser.add_argument('--num_latents_per_layer', type=int, default=8)
+    parser.add_argument('--d_model', type=int, default=64)
+    parser.add_argument('--emb_depth', type=int, default=4)
+    parser.add_argument('--dim_feedforward', type=int, default=128)
+    parser.add_argument('--nhead', type=int, default=4)
+    parser.add_argument('--dropout', type=int, default=0.0)
+    parser.add_argument('--num_layers', type=int, default=6)
+
     args = parser.parse_args()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -49,13 +61,22 @@ def main():
         config = yaml.safe_load(f)
         config['dim_x'] = args.dimension
 
+    for key, val in vars(args).items(): # Override the default arguments
+        if key in config:
+            config[key] = val
+            print(f"Overriding argument {key}: {config[key]}")
+
+    if args.pretrain:
+        assert args.model == 'tnpa'
+        config['pretrain'] = args.pretrain
+
     model_cls = getattr(load_module(f"models/{args.model}.py"), args.model.upper())
     model = model_cls(**config).to(device)
 
     root = osp.join(results_path,
                     'highdim_gp',
                     f'{args.dimension}D',
-                    args.model,
+                    args.model, args.expid,
                     f'min{args.min_num_points}_max{args.max_num_points}_{int(args.num_steps / 10000)}')
 
     if not osp.isdir(root):

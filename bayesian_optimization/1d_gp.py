@@ -135,7 +135,7 @@ def train(args, model):
         logger.info(f"Experiment: {args.model}-{args.expid}")
         logger.info(f'Total number of parameters: {sum(p.numel() for p in model.parameters())}\n')
 
-    for step in range(start_step, args.num_epochs+1):
+    for step in range(start_step, args.num_steps+1):
         model.train()
         optimizer.zero_grad()
         batch = sampler.sample(
@@ -168,7 +168,7 @@ def train(args, model):
 
             ravg.reset()
 
-        if step % args.save_freq == 0 or step == args.num_epochs:
+        if step % args.save_freq == 0 or step == args.num_steps:
             ckpt = AttrDict()
             ckpt.model = model.state_dict()
             ckpt.optimizer = optimizer.state_dict()

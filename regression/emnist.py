@@ -311,7 +311,7 @@ def pred_dists(args, model, num_cpoints_ls):
     eval_ds = EMNIST(train=False, class_range=args.class_range)
     eval_loader = torch.utils.data.DataLoader(eval_ds,
             batch_size=1,  # one image per batch
-            shuffle=False, num_workers=0)
+            shuffle=True, num_workers=0)
 
     # generate one batch per number of context points specified
     eval_batches = []

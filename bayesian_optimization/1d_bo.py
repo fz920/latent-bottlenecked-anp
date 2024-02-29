@@ -81,7 +81,7 @@ def main():
             assert args.model == 'tnpa'
             config['pretrain'] = args.pretrain
 
-        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd", "lbanp", "isanp"]:
+        if args.model in ["np", "anp", "cnp", "canp", "bnp", "banp", "tnpa", "tnpd", "tnpnd", "lbanp", "isanp", "isanp2"]:
             model = model_cls(**config)
         model.cuda()
 
@@ -365,17 +365,27 @@ def models(args, model):
 def plot(args):
     all_kernels = ['rbf', 'matern', 'periodic']
     kernel_names = ['RBF', 'Matérn 5/2', 'Periodic']
-    all_models = ["np", "anp", "bnp", "banp", "cnp", "canp", "tnpd", "tnpa", "tnpnd", "lbanp_8", "lbanp_128" "isanp"]
-    model_names = ["NP", "ANP", "BNP", "BANP", "CNP", "CANP", "TNP-D", "TNP-A", "TNP-ND", "LBANP (8)", "LBANP (128)", "ISANP (8)"]
-    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange', 'firebrick', 'purple', 'mediumvioletred']
+    all_models = ["np", "cnp", "tnpd", "tnpa", "tnpnd", "lbanp_8", "isanp_8", "isanp2_8"]
+    model_names = ["NP", "CNP", "TNP-D", "TNP-A", "TNP-ND", "LBANP (8)", "ISANP (8)", "ISANP2 (8)"]
+    # all_models = ["tnpd", "tnpa", "tnpnd", "lbanp_8", "lbanp_128", "isanp_8", "isanp_128", "isanp2_8", "isanp2_128"]
+    # model_names = ["TNP-D", "TNP-A", "TNP-ND", "LBANP (8)", "LBANP (128)", "ISANP (8)", "ISANP (128)", "ISANP2 (8)", "ISANP2 (128)"]
+    colors = ['navy', 'darkgreen', 'darkgoldenrod', 'blueviolet', 'darkred', 'dimgray', 'red', 'deepskyblue', 'orange']
     fig, axes = plt.subplots(1, 3, figsize=(20, 5))
     for k_id, kernel in enumerate(all_kernels):
         ax = axes[k_id]
         for i, model in enumerate(all_models):
-            if 'lbanp' in model or 'isanp' in model:
-                match_number = re.search(r'\d+', model)
-                number = int(match_number.group())
-                logfile = osp.join(results_path, f'bayesopt_{kernel}', model[:5], f'{model[:5]}_bo_1d_{number}', f'bo_{kernel}_{model[:5]}_{args.bo_seed}.npy') # currently only 8 latent variables
+            if model == 'lbanp_8':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'lbanp', 'lbanp_bo_1d_8', f'bo_{kernel}_lbanp_{args.bo_seed}.npy')
+            elif model == 'lbanp_128':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'lbanp', 'lbanp_bo_1d_128', f'bo_{kernel}_lbanp_{args.bo_seed}.npy')
+            elif model == 'isanp_8':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'isanp', 'isanp_bo_1d_8', f'bo_{kernel}_isanp_{args.bo_seed}.npy')
+            elif model == 'isanp_128':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'isanp', 'isanp_bo_1d_128', f'bo_{kernel}_isanp_{args.bo_seed}.npy')
+            elif model == 'isanp2_8':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'isanp2', 'isanp2_bo_1d_8', f'bo_{kernel}_isanp2_{args.bo_seed}.npy')
+            elif model == 'isanp2_128':
+                logfile = osp.join(results_path, f'bayesopt_{kernel}', 'isanp2', 'isanp2_bo_1d_128', f'bo_{kernel}_isanp2_{args.bo_seed}.npy')
             else:
                 logfile = osp.join(results_path, f'bayesopt_{kernel}', model, f'{model}_bo_1d', f'bo_{kernel}_{model}_{args.bo_seed}.npy')
             result = np.load(logfile, allow_pickle=True)
@@ -383,7 +393,7 @@ def plot(args):
             mean_regret = np.mean(regrets, axis=0)
             std_regret = np.std(regrets, axis=0)
             steps = np.arange(regrets.shape[1])
-            
+
             ax.set_ylim((0.0, 0.4))
             ax.plot(steps, mean_regret, label=model_names[i], color=colors[i], lw=2.0)
             ax.fill_between(
@@ -406,7 +416,7 @@ def plot(args):
 
         ax.set_xlabel('Iterations', fontsize=20)
         ax.set_title(kernel_names[k_id], fontsize=20)
-        
+
     axes[0].set_ylabel('Regret', fontsize=20)
     plt.subplots_adjust(bottom=0.24)
     handles, labels = plt.gca().get_legend_handles_labels()
