@@ -33,7 +33,7 @@ def main():
 
     parser.add_argument('--mode', choices=['bo', 'plot'], default='bo')
     parser.add_argument('--time_comparison', action='store_true', default=False)
-
+    parser.add_argument('--expid', type=str, default=None)
     parser.add_argument('--objective',
                         choices=['ackley',
                                  'cosine',
@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--dimension', type=int, default=2)
     parser.add_argument('--acquisition', choices=['ucb', 'ei'], default='ucb')
 
+    parser.add_argument('--pretrain', action='store_true', default=False)
     parser.add_argument('--model', default='tnpa')
     parser.add_argument('--train_num_bootstrap', type=int, default=10)
     parser.add_argument('--train_num_steps', type=int, default=100000)
@@ -61,6 +62,16 @@ def main():
     parser.add_argument('--num_initial_design', type=int, default=1)
     parser.add_argument('--num_bootstrap', type=int, default=200)
     parser.add_argument('--seed', type=int, default=1)
+
+    # LBANP and ISANP Arguments
+    parser.add_argument('--num_latents', type=int, default=8)
+    parser.add_argument('--num_latents_per_layer', type=int, default=8)
+    parser.add_argument('--d_model', type=int, default=64)
+    parser.add_argument('--emb_depth', type=int, default=4)
+    parser.add_argument('--dim_feedforward', type=int, default=128)
+    parser.add_argument('--nhead', type=int, default=4)
+    parser.add_argument('--dropout', type=int, default=0.0)
+    parser.add_argument('--num_layers', type=int, default=6)
 
     args = parser.parse_args()
 
@@ -78,6 +89,7 @@ def main():
             )
         else:
             bo(
+                args,
                 obj_func=args.objective,
                 dim_problem=args.dimension,
                 result_path=results_path,
@@ -249,6 +261,7 @@ def gp(
 
 
 def bo(
+        args,
         obj_func: str,
         dim_problem: int,
         result_path: str,
@@ -272,6 +285,15 @@ def bo(
         config = yaml.safe_load(file)
         config['dim_x'] = dim_problem
 
+    for key, val in vars(args).items(): # Override the default arguments
+        if key in config:
+            config[key] = val
+            print(f"Overriding argument {key}: {config[key]}")
+
+    if args.pretrain:
+        assert args.model == 'tnpa'
+        config['pretrain'] = args.pretrain
+
     model_cls = getattr(load_module(f"models/{model_name}.py"), model_name.upper())
     model = model_cls(**config).to(device)
 
@@ -284,7 +306,7 @@ def bo(
     if dim_problem == 1:
         ckpt_path = osp.join(results_path, '1d', model_name, expid, 'ckpt.tar')
     else:
-        ckpt_path = osp.join(results_path, 'highdim_gp', f'{dim_problem}D', model_name, expid, 'ckpt.tar')
+        ckpt_path = osp.join(results_path, 'highdim_gp', f'{dim_problem}D', model_name, args.expid, expid, 'ckpt.tar')
 
     ckpt = torch.load(ckpt_path, map_location=device)
     model.load_state_dict(ckpt.model)

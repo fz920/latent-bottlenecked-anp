@@ -71,7 +71,7 @@ class LBANP(nn.Module):
             nn.Linear(dim_feedforward, dim_y*2)
         )
 
-    
+
 
     def get_context_encoding(self, batch):
         # Perform Encoding

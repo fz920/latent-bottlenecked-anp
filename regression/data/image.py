@@ -112,7 +112,7 @@ def task_to_img(xc, yc, xt, yt, shape):
 
     return task_img, completed_img
 
-def pred_to_img(xt, yt, shape):
+def pred_to_img(xt, yt, shape, variance=False):
     xt = xt.cpu()
     yt = yt.cpu()
 
@@ -129,7 +129,10 @@ def pred_to_img(xt, yt, shape):
 
     for b in range(B):
         for c in range(3):
-            completed_img[b, c, xt1[b], xt2[b]] = yt[b, :, min(c, C-1)] + 0.5
+            if variance:
+                completed_img[b, c, xt1[b], xt2[b]] = yt[b, :, min(c, C-1)]
+            else:
+                completed_img[b, c, xt1[b], xt2[b]] = yt[b, :, min(c, C-1)] + 0.5
     completed_img = completed_img.clamp(0, 1)
 
     return completed_img

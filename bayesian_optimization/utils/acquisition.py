@@ -29,7 +29,8 @@ class EI(AnalyticAcquisitionFunction):
         self.num_bs = num_bs
         self.maximize = maximize
 
-    @t_batch_mode_transform(expected_q=1, assert_output_shape=False)
+    # @t_batch_mode_transform(expected_q=1, assert_output_shape=False)
+    @t_batch_mode_transform(expected_q=1)
     def forward(self, X: Tensor) -> Tensor:
         self.best_f = self.best_f.to(X)
 

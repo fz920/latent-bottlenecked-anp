@@ -123,9 +123,9 @@ def main():
     elif args.mode == 'eval':
         eval(args, model)
     elif args.mode == 'visualize':
-        num_cpoints_ls = [1, int(0.25*28*128), int(0.5*28*28), int(0.75*28*28), int(28*28)]
+        num_cpoints_ls = [1, 10, 100, int(28*28)]
         pred_dist, task_img = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
-        visualise_img(pred_dist, task_img)
+        visualise_img(pred_dist, task_img, num_cpoints_ls)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -333,8 +333,8 @@ def pred_dists(args, model, num_cpoints_ls):
     return pred_dist, eval_batches  # return the predicted distributions and the context images
 
 
-def visualise_img(pred_dist, eval_batches, shape=(1, 28, 28)):
-    fig, axs = plt.subplots(len(pred_dist), 3, figsize=(8, 8))
+def visualise_img(pred_dist, eval_batches, num_cpoints_ls, shape=(1, 28, 28)):
+    fig, axs = plt.subplots(3, len(pred_dist), figsize=(8, 8), dpi=400)
 
     for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
         mean = dist.mean.cpu().detach()  # Assuming pred_dist is on GPU
@@ -344,24 +344,24 @@ def visualise_img(pred_dist, eval_batches, shape=(1, 28, 28)):
         task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
 
         # Visualise the task images
-        axs[i, 0].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
-        axs[i, 0].set_title(f'Task Image {i+1}')
-        axs[i, 0].axis('off')
+        axs[0, i].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
+        axs[0, i].set_title(f'{num_cpoints_ls[i]}')
+        axs[0, i].axis('off')
 
         # Visualise the mean
         mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
-        axs[i, 1].imshow(mean_img, cmap='gray')
-        axs[i, 1].set_title(f'Mean {i+1}')
-        axs[i, 1].axis('off')
+        axs[1, i].imshow(mean_img, cmap='gray')
+        # axs[1, i].set_title(f'Mean {i+1}')
+        axs[1, i].axis('off')
 
         # Visualise the variance
-        var_img = pred_to_img(batch.xt, variance, shape)[0].permute(1, 2, 0)
-        axs[i, 2].imshow(var_img, cmap='gray')
-        axs[i, 2].set_title(f'Variance {i+1}')
-        axs[i, 2].axis('off')
+        var_img = pred_to_img(batch.xt, variance, shape, variance=True)[0].permute(1, 2, 0)
+        axs[2, i].imshow(var_img, cmap='gray')
+        # axs[2, i].set_title(f'Variance {i+1}')
+        axs[2, i].axis('off')
 
     plt.tight_layout()
-    plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis.pdf', format='pdf', bbox_inches='tight')
+    plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis_emnist.pdf', format='pdf', bbox_inches='tight')
     plt.show()
 
 if __name__ == '__main__':
