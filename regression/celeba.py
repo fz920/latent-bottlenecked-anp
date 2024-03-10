@@ -17,6 +17,7 @@ import yaml
 import torch
 import time
 import matplotlib.pyplot as plt
+import numpy as np
 
 # Monkey patch collections
 import collections
@@ -32,12 +33,17 @@ from utils.misc import load_module
 from utils.paths import results_path, evalsets_path
 from utils.log import get_logger, RunningAverage
 
+from memory_profiler import memory_usage
+import csv
+import time
+
 def main():
     parser = argparse.ArgumentParser()
 
     # Experiment
     parser.add_argument('--mode',
-            choices=['train', 'eval', 'eval_multiple_runs', 'visualize', 'attention_map'],
+            choices=['train', 'eval', 'eval_multiple_runs', 'visualize',
+                     'attention_map', 'ablation'],
             default='train')
     parser.add_argument('--expid', type=str, default='default')
     parser.add_argument('--resume', action='store_true')
@@ -119,6 +125,9 @@ def main():
         visualise_img(args, pred_dist, task_img)
     elif args.mode == 'attention_map':
         visualize_attention_map(args, model)
+    elif args.mode == 'ablation':
+        ablation_memory(args, model)
+        ablation_timing(args, model)
     else:
         raise NotImplementedError
 
@@ -399,6 +408,105 @@ def visualize_attention_map(args, model):
             plt.matshow(attention_weights[0, j, :].reshape(32, 32))
             plt.axis('off')
             plt.savefig(f'/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/attention_map_lbanp/attn_map{j}_layer{i}.pdf', format='pdf', bbox_inches='tight')
+
+
+def ablation_memory(args, model):
+    torch.manual_seed(35)
+    torch.cuda.manual_seed(35)
+    num_cpoints_ls = np.arange(200, 1400, 10)
+    ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
+    model.load_state_dict(ckpt['model'])
+
+    eval_ds = CelebA(train=False, resolution=args.resolution)
+    eval_loader = torch.utils.data.DataLoader(eval_ds, batch_size=1, shuffle=True, num_workers=4)
+
+    eval_batches = []
+    for x, _ in tqdm(eval_loader, ascii=True):
+        for num_cpoints in num_cpoints_ls:
+            eval_batches.append(img_to_task(x, num_ctx=num_cpoints, target_all=True, pred_all=True, t_noise=args.t_noise))
+        break
+
+    model.eval()
+    pred_dist = []
+    memory_usages = []
+
+    def predict_and_measure(batch):
+        for key, val in batch.items():
+            batch[key] = val.cuda()
+        return model.predict(batch['xc'], batch['yc'], batch['xt'])
+
+    with torch.no_grad():
+        for batch in tqdm(eval_batches, ascii=True):
+            # Measure the memory usage of the predict function
+            mem_usage = memory_usage((predict_and_measure, (batch,)), max_usage=True, include_children=True)
+            pred_tar = predict_and_measure(batch)
+            pred_dist.append(pred_tar)
+            memory_usages.append(mem_usage)  # memory_usage returns a list, get the first element
+
+    # New code to save memory usage data to a CSV file
+    csv_file_path = 'model_memory_usage.csv'
+    with open(csv_file_path, 'a', newline='') as csvfile:
+        fieldnames = ['model_name', 'memory_usage_MB']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        # Check if the file is empty to write the header
+        csvfile.seek(0, 2)
+        if csvfile.tell() == 0:
+            writer.writeheader()
+
+        # Write memory usage data
+        for mem_usage in memory_usages:
+            writer.writerow({'model_name': args.expid, 'memory_usage_MB': mem_usage})
+
+    print(f"Memory usage data saved to {csv_file_path}")
+
+def ablation_timing(args, model):
+    torch.manual_seed(35)
+    torch.cuda.manual_seed(35)
+    num_cpoints_ls = np.arange(1, 3000, 10)
+    ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
+    model.load_state_dict(ckpt['model'])
+
+    eval_ds = CelebA(train=False, resolution=args.resolution)
+    eval_loader = torch.utils.data.DataLoader(eval_ds, batch_size=1, shuffle=True, num_workers=4)
+
+    eval_batches = []
+    for x, _ in tqdm(eval_loader, ascii=True):
+        for num_cpoints in num_cpoints_ls:
+            eval_batches.append(img_to_task(x, num_ctx=num_cpoints, target_all=True, pred_all=True, t_noise=args.t_noise))
+        break
+
+    model.eval()
+    pred_dist = []
+    timing_results = []
+
+    with torch.no_grad():
+        for batch in tqdm(eval_batches, ascii=True):
+            for key, val in batch.items():
+                batch[key] = val.cuda()
+            start_time = time.time()
+            # Assuming your prediction function is as follows
+            pred_tar = model.predict(batch['xc'], batch['yc'], batch['xt'])
+            end_time = time.time()
+            pred_dist.append(pred_tar)
+            # Calculate and store execution time along with the number of context points
+            timing_results.append((num_cpoints, end_time - start_time))
+
+    # Save timing data to a CSV file
+    csv_file_path = 'model_timing.csv'
+    with open(csv_file_path, 'a', newline='') as csvfile:
+        fieldnames = ['model_name', 'num_context_points', 'execution_time_sec']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        csvfile.seek(0, 2)  # Move the cursor to the end of the file
+        if csvfile.tell() == 0:
+            writer.writeheader()
+
+        for num_cpoints, exec_time in timing_results:
+            writer.writerow({'model_name': args.expid, 'num_context_points': num_cpoints, 'execution_time_sec': exec_time})
+
+    print(f"Timing data saved to {csv_file_path}")
+
 
 if __name__ == '__main__':
     main()

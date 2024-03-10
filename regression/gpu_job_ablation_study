@@ -37,7 +37,7 @@
 #! ######################################################################################
 #! ######################################################################################
 #! set configurations in run.py, e.g. options="--train_json=train_fbank.json --lr=0.01":
-options="--mode visualize --expid tnpd_celeba64 --model tnpd --resolution 64 --max_num_points 800"
+options="--mode ablation --expid tnpd_celeba32 --model tnpd --resolution 32 --max_num_points 200"
 
 #! ######################################################################################
 #! ######################################################################################

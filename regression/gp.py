@@ -83,8 +83,8 @@ def main():
     parser.add_argument('--t_noise', type=float, default=None)
 
     # Plot
-    parser.add_argument('--plot_seed', type=int, default=1)
-    parser.add_argument('--plot_batch_size', type=int, default=2)
+    parser.add_argument('--plot_seed', type=int, default=40)
+    parser.add_argument('--plot_batch_size', type=int, default=1)
     parser.add_argument('--plot_num_samples', type=int, default=30)
     parser.add_argument('--plot_num_ctx', type=int, default=30)
     parser.add_argument('--plot_num_tar', type=int, default=10)
@@ -119,8 +119,6 @@ def main():
         eval(args, model)
     elif args.mode == 'plot':
         plot(args, model)
-    elif args.mode == 'plot_all':
-        plot_all(args)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -347,7 +345,7 @@ def plot(args, model):
 
     if args.plot_batch_size > 1:
         nrows = max(args.plot_batch_size//4, 1)
-        ncols = min(2, args.plot_batch_size)
+        ncols = min(1, args.plot_batch_size)
         _, axes = plt.subplots(nrows, ncols,
                 figsize=(5*ncols, 5*nrows))
         axes = axes.flatten()
