@@ -1,0 +1,3 @@
+Model,Context Size,Memory Used (MB),Inference Time (ms)
+TNPD,1000,7650.0,763.3154093424479
+TNPD,1500,7580.0,7974.856384277344
