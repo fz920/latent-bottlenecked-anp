@@ -486,8 +486,8 @@ def plot(
     by_label = dict(zip(labels, handles))
     fig.legend(by_label.values(), by_label.keys(), loc="lower center", fancybox=True, shadow=True, ncol=11, fontsize=16, facecolor='white')
 
-    figname = f'Multi-dimentional BO_{acq_func}.png'
-    plt.savefig(osp.join(root, figname), dpi=500, bbox_inches='tight')
+    figname = f'Multi-dimentional BO_{acq_func}.pdf'
+    plt.savefig(osp.join(root, figname), dpi=500, bbox_inches='tight', format='pdf')
     plt.show()
 
 

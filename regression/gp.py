@@ -30,6 +30,8 @@ from utils.misc import load_module
 from utils.paths import results_path, evalsets_path
 from utils.log import get_logger, RunningAverage
 
+import matplotlib.pyplot as plt
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -80,6 +82,14 @@ def main():
     parser.add_argument('--eval_kernel', type=str, default='rbf')
     parser.add_argument('--t_noise', type=float, default=None)
 
+    # Plot
+    parser.add_argument('--plot_seed', type=int, default=0)
+    parser.add_argument('--plot_batch_size', type=int, default=16)
+    parser.add_argument('--plot_num_samples', type=int, default=30)
+    parser.add_argument('--plot_num_ctx', type=int, default=30)
+    parser.add_argument('--plot_num_tar', type=int, default=10)
+    parser.add_argument('--start_time', type=str, default=None)
+
     args = parser.parse_args()
 
     if args.expid is not None:
@@ -107,6 +117,8 @@ def main():
         train(args, model)
     elif args.mode == 'eval':
         eval(args, model)
+    elif args.mode == 'plot':
+        plot(args, model)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -283,6 +295,111 @@ def eval(args, model):
         logger.info(line)
 
     return line
+
+def plot(args, model):
+    seed = args.plot_seed
+    num_smp = args.plot_num_samples
+
+    if args.mode == "plot":
+        ckpt = torch.load(os.path.join(args.root, 'ckpt.tar'), map_location='cuda')
+        model.load_state_dict(ckpt.model)
+    model = model.cuda()
+
+    def tnp(x):
+        return x.squeeze().cpu().data.numpy()
+
+    kernel = RBFKernel()
+    sampler = GPSampler(kernel, t_noise=args.t_noise, seed=args.eval_seed)
+
+    xp = torch.linspace(-2, 2, 200).cuda()
+    batch = sampler.sample(
+        batch_size=args.plot_batch_size,
+        num_ctx=args.plot_num_ctx,
+        num_tar=args.plot_num_tar,
+        device='cuda',
+    )
+
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+    Nc = batch.xc.size(1)
+    Nt = batch.xt.size(1)
+
+    model.eval()
+    with torch.no_grad():
+        if args.model in ["np", "anp", "bnp", "banp"]:
+            outs = model(batch, num_smp, reduce_ll=False)
+        else:
+            outs = model(batch, reduce_ll=False)
+        tar_loss = outs.tar_ll  # [Ns,B,Nt] ([B,Nt] for CNP)
+        if args.model in ["cnp", "canp", "tnpd", "tnpa", "tnpnd", "lbanp", "isanp", "isanp2"]:
+            tar_loss = tar_loss.unsqueeze(0)  # [1,B,Nt]
+
+        xt = xp[None, :, None].repeat(args.plot_batch_size, 1, 1)
+        if args.model in ["np", "anp", "bnp", "banp", "tnpa", "tnpnd"]:
+            pred = model.predict(batch.xc, batch.yc, xt, num_samples=num_smp)
+        else:
+            pred = model.predict(batch.xc, batch.yc, xt)
+        
+        mu, sigma = pred.mean, pred.scale
+
+    if args.plot_batch_size > 1:
+        nrows = max(args.plot_batch_size//4, 1)
+        ncols = min(4, args.plot_batch_size)
+        _, axes = plt.subplots(nrows, ncols,
+                figsize=(5*ncols, 5*nrows))
+        axes = axes.flatten()
+    else:
+        axes = [plt.gca()]
+
+    # multi sample
+    if mu.dim() == 4:
+        for i, ax in enumerate(axes):
+            for s in range(mu.shape[0]):
+                ax.plot(tnp(xp), tnp(mu[s][i]), color='steelblue',
+                        alpha=max(0.5/args.plot_num_samples, 0.1))
+                ax.fill_between(tnp(xp), tnp(mu[s][i])-tnp(sigma[s][i]),
+                        tnp(mu[s][i])+tnp(sigma[s][i]),
+                        color='skyblue',
+                        alpha=max(0.2/args.plot_num_samples, 0.02),
+                        linewidth=0.0)
+            ax.scatter(tnp(batch.xc[i]), tnp(batch.yc[i]),
+                       color='k', label=f'context {Nc}', zorder=mu.shape[0] + 1)
+            ax.scatter(tnp(batch.xt[i]), tnp(batch.yt[i]),
+                       color='orchid', label=f'target {Nt}',
+                       zorder=mu.shape[0] + 1)
+            ax.legend()
+            ax.set_title(f"tar_loss: {tar_loss[:, i, :].mean(): 0.4f}")
+    else:
+        for i, ax in enumerate(axes):
+            ax.plot(tnp(xp), tnp(mu[i]), color='steelblue', alpha=0.5)
+            ax.fill_between(tnp(xp), tnp(mu[i]-sigma[i]), tnp(mu[i]+sigma[i]),
+                    color='skyblue', alpha=0.2, linewidth=0.0)
+            ax.scatter(tnp(batch.xc[i]), tnp(batch.yc[i]),
+                       color='k', label=f'context {Nc}')
+            ax.scatter(tnp(batch.xt[i]), tnp(batch.yt[i]),
+                       color='orchid', label=f'target {Nt}')
+            ax.legend()
+            ax.set_title(f"tar_loss: {tar_loss[:, i, :].mean(): 0.4f}")
+
+    plt.suptitle(f"{args.expid}", y=0.995)
+    plt.tight_layout()
+
+    save_dir_1 = osp.join(args.root, f"plot_num{num_smp}-c{Nc}-t{Nt}-seed{seed}-{args.start_time}.pdf")
+    file_name = "-".join([args.model, args.expid, f"plot_num{num_smp}",
+                          f"c{Nc}", f"t{Nt}", f"seed{seed}", f"{args.start_time}.pdf"])
+    if args.expid is not None:
+        save_dir_2 = osp.join(results_path, "gp", "plot", args.expid, file_name)
+        if not osp.exists(osp.join(results_path, "gp", "plot", args.expid)):
+            os.makedirs(osp.join(results_path, "gp", "plot", args.expid))
+    else:
+        save_dir_2 = osp.join(results_path, "gp", "plot", file_name)
+        if not osp.exists(osp.join(results_path, "gp", "plot")):
+            os.makedirs(osp.join(results_path, "gp", "plot"))
+    plt.savefig(save_dir_1, format='pdf', bbox_inches='tight')
+    plt.savefig(save_dir_2, format='pdf', bbox_inches='tight')
+    print(f"Evaluation Plot saved at {save_dir_1}\n")
+    print(f"Evaluation Plot saved at {save_dir_2}\n")
 
 if __name__ == '__main__':
     main()

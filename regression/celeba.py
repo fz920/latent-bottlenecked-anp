@@ -37,7 +37,7 @@ def main():
 
     # Experiment
     parser.add_argument('--mode',
-            choices=['train', 'eval', 'eval_multiple_runs', 'visualize'],
+            choices=['train', 'eval', 'eval_multiple_runs', 'visualize', 'attention_map'],
             default='train')
     parser.add_argument('--expid', type=str, default='default')
     parser.add_argument('--resume', action='store_true')
@@ -113,9 +113,14 @@ def main():
     elif args.mode == 'eval':
         eval(args, model)
     elif args.mode == 'visualize':
-        num_cpoints_ls = [1, int(0.25*128*128), int(0.5*128*128), int(0.75*128*128), int(128*128)]
+        num_cpoints_ls = [1, int(0.001*args.resolution**2), int(0.005*args.resolution**2),
+                          int(0.01*args.resolution**2), int(0.1*args.resolution**2), int(args.resolution**2)]
         pred_dist, task_img = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
-        visualise_img(pred_dist, task_img)
+        visualise_img(args, pred_dist, task_img)
+    elif args.mode == 'attention_map':
+        visualize_attention_map(args, model)
+    else:
+        raise NotImplementedError
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -286,18 +291,91 @@ def eval(args, model):
     return line
 
 def pred_dists(args, model, num_cpoints_ls):
-    torch.manual_seed(args.eval_seed)
-    torch.cuda.manual_seed(args.eval_seed)
+    torch.manual_seed(35)
+    torch.cuda.manual_seed(35)
     ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
     model.load_state_dict(ckpt.model)
 
     eval_ds = CelebA(train=False, resolution=args.resolution)
     eval_loader = torch.utils.data.DataLoader(eval_ds,
             batch_size=1,
-            shuffle=False, num_workers=4)
+            shuffle=True, num_workers=4)
 
     # generate one batch per number of context points specified
     eval_batches = []
+    for x, _ in tqdm(eval_loader, ascii=True):
+        for num_cpoints in num_cpoints_ls:
+            eval_batches.append(img_to_task(
+                x, num_ctx=num_cpoints, target_all=True, pred_all=True,
+                t_noise=args.t_noise)
+            )
+        break
+
+    model.eval()
+    pred_dist = []
+    with torch.no_grad():
+        for batch in tqdm(eval_batches, ascii=True):
+            for key, val in batch.items():
+                batch[key] = val.cuda()
+            pred_tar = model.predict(batch.xc, batch.yc, batch.xt)
+            pred_dist.append(pred_tar)
+    return pred_dist, eval_batches  # return the predicted distributions and the context images
+
+
+def visualise_img(args, pred_dist, eval_batches):
+    shape = (3, args.resolution, args.resolution)
+    for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
+        base_path = f'/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/{args.expid}'
+        os.makedirs(base_path, exist_ok=True)
+
+        mean = dist.mean.cpu().detach()
+        variance = dist.variance.cpu().detach()
+
+        task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
+
+        # Save the task image
+        plt.figure(figsize=(4, 4), dpi=200)
+        plt.imshow(task_img[0].permute(1, 2, 0))
+        plt.axis('off')
+        plt.savefig(f'{base_path}/task_img_{i+1}.png', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
+
+        # Save the mean image
+        mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
+        plt.figure(figsize=(4, 4), dpi=200)
+        plt.imshow(mean_img, cmap='gray')
+        plt.axis('off')
+        plt.savefig(f'{base_path}/mean_img_{i+1}.png', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
+
+        # Save the variance image
+        var_img = pred_to_img(batch.xt, variance, shape, variance=True)[0].permute(1, 2, 0)
+        # def normalize(image):
+        #     min_val = image.min()
+        #     max_val = image.max()
+        #     normalized = (image - min_val) / (max_val - min_val)
+        #     return normalized
+        # var_img_normalized = normalize(var_img)
+        plt.figure(figsize=(4, 4), dpi=200)
+        plt.imshow(var_img*5, cmap='gray')
+        plt.axis('off')
+        plt.savefig(f'{base_path}/var_img_{i+1}.png', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
+
+def visualize_attention_map(args, model):
+    torch.manual_seed(10)
+    torch.cuda.manual_seed(10)
+    ckpt = torch.load(osp.join(args.root, 'ckpt.tar'))
+    model.load_state_dict(ckpt.model)
+
+    eval_ds = CelebA(train=False, resolution=args.resolution)
+    eval_loader = torch.utils.data.DataLoader(eval_ds,
+            batch_size=1,
+            shuffle=True, num_workers=4)
+
+    # generate one batch per number of context points specified
+    eval_batches = []
+    num_cpoints_ls = [int(32*32)]
     for num_cpoints in num_cpoints_ls:
         for x, _ in tqdm(eval_loader, ascii=True):
             eval_batches.append(img_to_task(
@@ -312,41 +390,15 @@ def pred_dists(args, model, num_cpoints_ls):
         for batch in tqdm(eval_batches, ascii=True):
             for key, val in batch.items():
                 batch[key] = val.cuda()
-            pred_tar = model.predict(batch.xc, batch.yc, batch.xt)
+            pred_tar, weights_ls = model.predict(batch.xc, batch.yc, batch.xt, attn_map=True)
             pred_dist.append(pred_tar)
-    return pred_dist, eval_batches  # return the predicted distributions and the context images
 
-
-def visualise_img(pred_dist, eval_batches, shape=(3, 128, 128)):
-    fig, axs = plt.subplots(len(pred_dist), 3, figsize=(8, 8))
-
-    for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
-        mean = dist.mean.cpu().detach()  # Assuming pred_dist is on GPU
-        variance = dist.variance.cpu().detach() # Assuming pred_dist is on GPU
-
-        # Reconstruct the task image using the context points
-        task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
-
-        # Visualise the task images
-        axs[i, 0].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
-        axs[i, 0].set_title(f'Task Image {i+1}')
-        axs[i, 0].axis('off')
-
-        # Visualise the mean
-        mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
-        axs[i, 1].imshow(mean_img, cmap='gray')
-        axs[i, 1].set_title(f'Mean {i+1}')
-        axs[i, 1].axis('off')
-
-        # Visualise the variance
-        var_img = pred_to_img(batch.xt, variance, shape)[0].permute(1, 2, 0)
-        axs[i, 2].imshow(var_img, cmap='gray')
-        axs[i, 2].set_title(f'Variance {i+1}')
-        axs[i, 2].axis('off')
-
-    plt.tight_layout()
-    plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis_celeba128.pdf', format='pdf', bbox_inches='tight')
-    plt.show()
+    for i, attention_weights in enumerate(weights_ls):
+        for j in range(attention_weights.shape[1]):
+            plt.figure(figsize=(10, 10), dpi=400)
+            plt.matshow(attention_weights[0, j, :].reshape(32, 32))
+            plt.axis('off')
+            plt.savefig(f'/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/attention_map_lbanp/attn_map{j}_layer{i}.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == '__main__':
     main()

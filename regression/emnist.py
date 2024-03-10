@@ -123,9 +123,9 @@ def main():
     elif args.mode == 'eval':
         eval(args, model)
     elif args.mode == 'visualize':
-        num_cpoints_ls = [1, 10, 100, int(28*28)]
+        num_cpoints_ls = [1, 50, 100, 200, int(28*28)]
         pred_dist, task_img = pred_dists(args, model, num_cpoints_ls=num_cpoints_ls)
-        visualise_img(pred_dist, task_img, num_cpoints_ls)
+        visualise_img(args, pred_dist, task_img, num_cpoints_ls)
 
 def train(args, model):
     if osp.exists(args.root + '/ckpt.tar'):
@@ -309,6 +309,7 @@ def pred_dists(args, model, num_cpoints_ls):
     model.load_state_dict(ckpt.model)
 
     eval_ds = EMNIST(train=False, class_range=args.class_range)
+    torch.manual_seed(10)
     eval_loader = torch.utils.data.DataLoader(eval_ds,
             batch_size=1,  # one image per batch
             shuffle=True, num_workers=0)
@@ -333,36 +334,69 @@ def pred_dists(args, model, num_cpoints_ls):
     return pred_dist, eval_batches  # return the predicted distributions and the context images
 
 
-def visualise_img(pred_dist, eval_batches, num_cpoints_ls, shape=(1, 28, 28)):
-    fig, axs = plt.subplots(3, len(pred_dist), figsize=(8, 8), dpi=400)
+# def visualise_img(pred_dist, eval_batches, num_cpoints_ls, shape=(1, 28, 28)):
+#     fig, axs = plt.subplots(3, len(pred_dist), figsize=(8, 8), dpi=400)
 
+#     for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
+#         mean = dist.mean.cpu().detach()  # Assuming pred_dist is on GPU
+#         variance = dist.variance.cpu().detach() # Assuming pred_dist is on GPU
+
+#         # Reconstruct the task image using the context points
+#         task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
+
+#         # Visualise the task images
+#         axs[0, i].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
+#         axs[0, i].set_title(f'{num_cpoints_ls[i]}')
+#         axs[0, i].axis('off')
+
+#         # Visualise the mean
+#         mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
+#         axs[1, i].imshow(mean_img, cmap='gray')
+#         # axs[1, i].set_title(f'Mean {i+1}')
+#         axs[1, i].axis('off')
+
+#         # Visualise the variance
+#         var_img = pred_to_img(batch.xt, variance, shape, variance=True)[0].permute(1, 2, 0)
+#         axs[2, i].imshow(var_img, cmap='gray')
+#         # axs[2, i].set_title(f'Variance {i+1}')
+#         axs[2, i].axis('off')
+
+#     plt.tight_layout()
+#     plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis_emnist.pdf', format='pdf', bbox_inches='tight')
+#     plt.show()
+
+def visualise_img(args, pred_dist, eval_batches, num_cpoints_ls, shape=(1, 28, 28)):
     for i, (dist, batch) in enumerate(zip(pred_dist, eval_batches)):
-        mean = dist.mean.cpu().detach()  # Assuming pred_dist is on GPU
-        variance = dist.variance.cpu().detach() # Assuming pred_dist is on GPU
+        base_path = f'/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/{args.expid}'
+        os.makedirs(base_path, exist_ok=True)
 
-        # Reconstruct the task image using the context points
+        mean = dist.mean.cpu().detach()
+        variance = dist.variance.cpu().detach()
+
         task_img, _ = task_to_img(batch.xc, batch.yc, batch.xt, batch.yt, shape)
 
-        # Visualise the task images
-        axs[0, i].imshow(task_img[0].permute(1, 2, 0))  # Assuming the image is RGB
-        axs[0, i].set_title(f'{num_cpoints_ls[i]}')
-        axs[0, i].axis('off')
+        # Save the task image
+        plt.figure(figsize=(2.5, 2.5))
+        plt.imshow(task_img[0].permute(1, 2, 0))
+        plt.axis('off')
+        plt.savefig(f'{base_path}/task_img_{i+1}.pdf', format='pdf', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
 
-        # Visualise the mean
+        # Save the mean image
         mean_img = pred_to_img(batch.xt, mean, shape)[0].permute(1, 2, 0)
-        axs[1, i].imshow(mean_img, cmap='gray')
-        # axs[1, i].set_title(f'Mean {i+1}')
-        axs[1, i].axis('off')
+        plt.figure(figsize=(2.5, 2.5))
+        plt.imshow(mean_img, cmap='gray')
+        plt.axis('off')
+        plt.savefig(f'{base_path}/mean_img_{i+1}.pdf', format='pdf', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
 
-        # Visualise the variance
+        # Save the variance image
         var_img = pred_to_img(batch.xt, variance, shape, variance=True)[0].permute(1, 2, 0)
-        axs[2, i].imshow(var_img, cmap='gray')
-        # axs[2, i].set_title(f'Variance {i+1}')
-        axs[2, i].axis('off')
-
-    plt.tight_layout()
-    plt.savefig('/rds/user/fz287/hpc-work/MLMI4/lbanp_figures/context_vis_emnist.pdf', format='pdf', bbox_inches='tight')
-    plt.show()
+        plt.figure(figsize=(2.5, 2.5))
+        plt.imshow(var_img, cmap='gray')
+        plt.axis('off')
+        plt.savefig(f'{base_path}/var_img_{i+1}.pdf', format='pdf', bbox_inches='tight', pad_inches=0.0)
+        plt.close()
 
 if __name__ == '__main__':
     main()
